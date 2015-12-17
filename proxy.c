@@ -1,34 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "csapp.h"
 
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
-static const char *user_agent = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
-static const char *accept = "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n";
-static const char *accept_encoding = "Accept-Encoding: gzip, deflate\r\n";
-
 /* local structs */
-typedef struct
+typedef struct http_request
 {
     char method[10];
     char hostname[200];
     char path[1000];
 } http_request;
 
-typedef struct
+typedef struct http_header
 {
     char key[200];
     char value[1000];
-    http_header* next;
+    struct http_header* next;
 } http_header;
 
 /* local functions */
 void help_message();
 void handle_request(int fd);
 http_request* parse_request(char* line);
-http_header* parse_header(char* line);
+http_header* parse_header(char* line, http_header* current);
 void free_http_metadata(http_request* request_ptr, http_header* header_head);
 void process_header(http_header* root, http_request* request);
 
@@ -91,7 +88,7 @@ void handle_request(int fd)
     }
     /* parse request header */
     Rio_readlineb(&rio, buf, MAXLINE);
-    header_temp = parse_header(buf, http_header* header_curr);
+    header_temp = parse_header(buf, header_curr);
     if (!header_temp)
     {
         /* TODO: implement error handling here */
@@ -101,7 +98,7 @@ void handle_request(int fd)
     while(strcmp(buf, "\r\n"))
     {
         Rio_readlineb(&rio, buf, MAXLINE);
-        header_temp = parse_header(buf, http_header* header_curr);
+        header_temp = parse_header(buf, header_curr);
         if (!header_temp)
         {
             /* TODO: implement error handling here. Should exit rather then break */
@@ -135,7 +132,7 @@ void handle_request(int fd)
     request_buffer[0] = '\0';
     strcat(request_buffer, "GET ");
     strcat(request_buffer, request_info -> path);
-    strcat(" HTTP/1.0\r\n");
+    strcat(request_buffer, " HTTP/1.0\r\n");
     header_temp = header_root;
     while (header_temp != NULL)
     {
@@ -148,8 +145,16 @@ void handle_request(int fd)
     strcat(request_buffer, "\r\n");
     Rio_writen(remotefd, request_buffer, strlen(request_buffer));
 
+    /* catch response */
+    rio_t rio_remote;
+    Rio_readinitb(&rio_remote, remotefd);
+    int read_len;
+    while ((read_len = rio_readnb(&rio_remote, buf, MAXLINE)) > 0)
+    {
+        Rio_writen(fd, buf, read_len);
+    }
 
-
+    Close(remotefd);
     /* TODO: call free_http_metadata() here to free metadata tables */
     /* TODO: close remote connection. Client connection will be closed by main() */
 }
@@ -201,7 +206,7 @@ http_request* parse_request(char* line)
     else
     {
         memcpy(storage -> hostname, url_starting, path_starting - url_starting);
-        *(storage -> hostname + path_starting - url_starting) = '\0';
+        *((storage -> hostname) + (path_starting - url_starting)) = '\0';
         strcpy(storage -> path, path_starting);
     }
     return storage;
@@ -222,9 +227,9 @@ http_header* parse_header(char* line, http_header* last_node)
     /* fill in the struct */
     current -> next = NULL;
     memcpy(current -> key, line, sperater - line);
-    *(current -> key + sperater - line) = '\0';
-    memcpy(current -> value, sperator + 2, terminator - sperater - 2);
-    *(current -> value + terminator - sperater - 2) = '\0';
+    *((current -> key) + (sperater - line)) = '\0';
+    memcpy(current -> value, sperater + 2, terminator - sperater - 2);
+    *((current -> value) + (terminator - sperater) - 2) = '\0';
     /* link the last node to the current node */
     if (last_node)
     {
@@ -236,12 +241,12 @@ http_header* parse_header(char* line, http_header* last_node)
 /* frees structures allocated in request parsing */
 void free_http_metadata(http_request* request_ptr, http_header* header_head)
 {
-    free request_ptr;
+    free(request_ptr);
     http_header* temp;
     while (header_head != NULL)
     {
         temp = header_head -> next;
-        free header_head;
+        free(header_head);
         header_head = temp;
     }
     return;
