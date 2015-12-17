@@ -112,9 +112,46 @@ void handle_request(int fd)
     /* modify header and add necessary entries */
     process_header(header_root, request_info);
 
+    /* connecting remote */
+    /* parse remote address and port */
+    int remote_port = 80;
+    char remote_domain[200];
+    strcpy(remote_domain, request_info -> hostname);
+    char* port_start = strstr(remote_domain, ":");
+    if (port_start)
+    {
+        /* parse new port */
+        remote_port = atoi(port_start + 1);
+        /* cut original domain name */
+        *port_start = '\0';
+    }
+
+    /* establish connection to remote */
+    int remotefd;
+    remotefd = Open_clientfd(remote_domain, remote_port);
+
+    /* send HTTP request */
+    char request_buffer[10000];
+    request_buffer[0] = '\0';
+    strcat(request_buffer, "GET ");
+    strcat(request_buffer, request_info -> path);
+    strcat(" HTTP/1.0\r\n");
+    header_temp = header_root;
+    while (header_temp != NULL)
+    {
+        strcat(request_buffer, header_temp -> key);
+        strcat(request_buffer, ": ");
+        strcat(request_buffer, header_temp -> value);
+        strcat(request_buffer, "\r\n");
+        header_temp = header_temp -> next;
+    }
+    strcat(request_buffer, "\r\n");
+    Rio_writen(remotefd, request_buffer, strlen(request_buffer));
+
 
 
     /* TODO: call free_http_metadata() here to free metadata tables */
+    /* TODO: close remote connection. Client connection will be closed by main() */
 }
 
 /*
@@ -154,7 +191,7 @@ http_request* parse_request(char* line)
     }
     /* point to the start of hostname */
     url_starting += 7;
-    path_starting = strstr(url_starting, '/');
+    path_starting = strstr(url_starting, "/");
     if (!path_starting)
     {
         /* no path specified */
@@ -173,8 +210,8 @@ http_request* parse_request(char* line)
 /* parse a header line, return NULL when error */
 http_header* parse_header(char* line, http_header* last_node)
 {
-    char* sperater = strstr(line, ': ');
-    char* terminator = strstr(line, '\r\n');
+    char* sperater = strstr(line, ": ");
+    char* terminator = strstr(line, "\r\n");
     if ((!sperater) || (!terminator))
     {
         /* bad header format */
@@ -231,6 +268,7 @@ void process_header(http_header* root, http_request* request)
         {
             found = 1;
         }
+        temp = temp -> next;
     }
     if (!found)
     {
@@ -251,6 +289,7 @@ void process_header(http_header* root, http_request* request)
             found = 1;
             strcpy(temp -> value, "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3");
         }
+        temp = temp -> next;
     }
     if (!found)
     {
@@ -271,6 +310,7 @@ void process_header(http_header* root, http_request* request)
             found = 1;
             strcpy(temp -> value, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         }
+        temp = temp -> next;
     }
     if (!found)
     {
@@ -291,6 +331,7 @@ void process_header(http_header* root, http_request* request)
             found = 1;
             strcpy(temp -> value, "gzip, deflate");
         }
+        temp = temp -> next;
     }
     if (!found)
     {
@@ -311,6 +352,7 @@ void process_header(http_header* root, http_request* request)
             found = 1;
             strcpy(temp -> value, "close");
         }
+        temp = temp -> next;
     }
     if (!found)
     {
@@ -331,6 +373,7 @@ void process_header(http_header* root, http_request* request)
             found = 1;
             strcpy(temp -> value, "close");
         }
+        temp = temp -> next;
     }
     if (!found)
     {
