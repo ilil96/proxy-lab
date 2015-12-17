@@ -30,6 +30,7 @@ void handle_request(int fd);
 http_request* parse_request(char* line);
 http_header* parse_header(char* line);
 void free_http_metadata(http_request* request_ptr, http_header* header_head);
+void process_header(http_header* root, http_request* request);
 
 /* display usage message */
 void help_message()
@@ -107,6 +108,10 @@ void handle_request(int fd)
         }
         header_curr = header_temp;
     }
+
+    /* modify header and add necessary entries */
+    process_header(header_root, request_info);
+
 
 
     /* TODO: call free_http_metadata() here to free metadata tables */
@@ -191,6 +196,7 @@ http_header* parse_header(char* line, http_header* last_node)
     return current;
 }
 
+/* frees structures allocated in request parsing */
 void free_http_metadata(http_request* request_ptr, http_header* header_head)
 {
     free request_ptr;
@@ -200,6 +206,139 @@ void free_http_metadata(http_request* request_ptr, http_header* header_head)
         temp = header_head -> next;
         free header_head;
         header_head = temp;
+    }
+    return;
+}
+
+/* modify header to meet the request */
+void process_header(http_header* root, http_request* request)
+{
+    http_header* temp = root;
+    http_header* last = NULL;
+    int found = 0;
+    /* find the last node */
+    while (temp -> next != NULL)
+    {
+        temp = temp -> next;
+    }
+    last = temp;
+
+    /* process Host tag */
+    temp = root;
+    while (temp != NULL)
+    {
+        if (strcmp(temp -> key, "Host") == 0)
+        {
+            found = 1;
+        }
+    }
+    if (!found)
+    {
+        last -> next = malloc(sizeof(http_header));
+        last = last -> next;
+        last -> next = NULL;
+        strcpy(last -> key, "Host");
+        strcpy(last -> value, request -> hostname);
+    }
+
+    /* process User-Agent */
+    temp = root;
+    found = 0;
+    while (temp != NULL)
+    {
+        if (strcmp(temp -> key, "User-Agent") == 0)
+        {
+            found = 1;
+            strcpy(temp -> value, "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3");
+        }
+    }
+    if (!found)
+    {
+        last -> next = malloc(sizeof(http_header));
+        last = last -> next;
+        last -> next = NULL;
+        strcpy(last -> key, "User-Agent");
+        strcpy(last -> value, "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3");
+    }
+
+    /* process Accept */
+    temp = root;
+    found = 0;
+    while (temp != NULL)
+    {
+        if (strcmp(temp -> key, "Accept") == 0)
+        {
+            found = 1;
+            strcpy(temp -> value, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        }
+    }
+    if (!found)
+    {
+        last -> next = malloc(sizeof(http_header));
+        last = last -> next;
+        last -> next = NULL;
+        strcpy(last -> key, "Accept");
+        strcpy(last -> value, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+    }
+
+    /* process Accept-Encoding */
+    temp = root;
+    found = 0;
+    while (temp != NULL)
+    {
+        if (strcmp(temp -> key, "Accept-Encoding") == 0)
+        {
+            found = 1;
+            strcpy(temp -> value, "gzip, deflate");
+        }
+    }
+    if (!found)
+    {
+        last -> next = malloc(sizeof(http_header));
+        last = last -> next;
+        last -> next = NULL;
+        strcpy(last -> key, "Accept-Encoding");
+        strcpy(last -> value, "gzip, deflate");
+    }
+
+    /* process Connection */
+    temp = root;
+    found = 0;
+    while (temp != NULL)
+    {
+        if (strcmp(temp -> key, "Connection") == 0)
+        {
+            found = 1;
+            strcpy(temp -> value, "close");
+        }
+    }
+    if (!found)
+    {
+        last -> next = malloc(sizeof(http_header));
+        last = last -> next;
+        last -> next = NULL;
+        strcpy(last -> key, "Connection");
+        strcpy(last -> value, "close");
+    }
+
+    /* process Proxy-Connection */
+    temp = root;
+    found = 0;
+    while (temp != NULL)
+    {
+        if (strcmp(temp -> key, "Proxy-Connection") == 0)
+        {
+            found = 1;
+            strcpy(temp -> value, "close");
+        }
+    }
+    if (!found)
+    {
+        last -> next = malloc(sizeof(http_header));
+        last = last -> next;
+        last -> next = NULL;
+        strcpy(last -> key, "Proxy-Connection");
+        strcpy(last -> value, "close");
     }
     return;
 }
