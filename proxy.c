@@ -141,6 +141,9 @@ void handle_request(int fd)
 
     /* establish connection to remote */
     int remotefd;
+    #ifdef DEBUG
+    printf("Connecting %s at %d\n", remote_domain, remote_port);
+    #endif
     remotefd = Open_clientfd(remote_domain, remote_port);
 
     /* send HTTP request */
