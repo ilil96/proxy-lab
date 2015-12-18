@@ -7,7 +7,7 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
-#define DEBUG
+//#define DEBUG
 
 /* local structs */
 typedef struct http_request
@@ -83,7 +83,8 @@ int main(int argc, char **argv)
     port_number = atoi(argv[1]);
 
     /* open listen port */
-    int listenfd, clientlen, *connfd;
+    int listenfd, *connfd;
+    unsigned int clientlen;
     struct sockaddr_in clientaddr;
     listenfd = Open_listenfd(port_number);
 
@@ -637,7 +638,7 @@ cache_entry* search_least_use(cache_entry* root)
     while (root != NULL)
     {
         #ifdef DEBUG
-        printf("Checking cache %s, time tag %d\n", root -> path, root -> usage);
+        //printf("Checking cache %s, time tag %d\n", root -> path, root -> usage);
         #endif
         if (least > root -> usage)
         {
