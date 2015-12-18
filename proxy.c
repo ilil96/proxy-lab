@@ -6,6 +6,8 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
+#define DEBUG
+
 /* local structs */
 typedef struct http_request
 {
@@ -84,6 +86,9 @@ void handle_request(int fd)
     request_info = parse_request(buf);
     if (!request_info)
     {
+        #ifdef DEBUG
+        printf("Error parsing request\n");
+        #endif
         /* TODO: implement error handling here */
     }
     /* parse request header */
@@ -92,16 +97,26 @@ void handle_request(int fd)
     if (!header_temp)
     {
         /* TODO: implement error handling here */
+        #ifdef DEBUG
+        printf("Error parsing header (out of loop)\n");
+        #endif
     }
     header_root = header_temp;
     header_curr = header_temp;
     while(strcmp(buf, "\r\n"))
     {
         Rio_readlineb(&rio, buf, MAXLINE);
+        if (strcmp(buf, "\r\n") == 0)
+        {
+            break;
+        }
         header_temp = parse_header(buf, header_curr);
         if (!header_temp)
         {
             /* TODO: implement error handling here. Should exit rather then break */
+            #ifdef DEBUG
+            printf("Error parsing header (inside loop)\n");
+            #endif
         }
         header_curr = header_temp;
     }
@@ -175,6 +190,9 @@ http_request* parse_request(char* line)
     }
 
     /* parse method */
+    #ifdef DEBUG
+    printf("Handle %s\n", raw_method);
+    #endif
     if (strcmp("GET", raw_method) != 0)
     {
         /* if method is not GET, ignore this request */
@@ -220,6 +238,10 @@ http_header* parse_header(char* line, http_header* last_node)
     if ((!sperater) || (!terminator))
     {
         /* bad header format */
+        #ifdef DEBUG
+        printf("Bad header format\n");
+        printf("Source: %s\n", line);
+        #endif
         return NULL;
     }
     /* allocate space for new node */
