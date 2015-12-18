@@ -88,6 +88,7 @@ void handle_request(int fd)
     {
         #ifdef DEBUG
         printf("Error parsing request\n");
+        return;
         #endif
         /* TODO: implement error handling here */
     }
@@ -190,11 +191,10 @@ http_request* parse_request(char* line)
     }
 
     /* parse method */
-    #ifdef DEBUG
-    printf("Handle %s\n", raw_method);
-    #endif
     if (strcmp("GET", raw_method) != 0)
     {
+        printf("Unsupported method %s\n", raw_method);
+        // printf("Raw request: %s\n", line);
         /* if method is not GET, ignore this request */
         return 0;
     }
