@@ -102,24 +102,27 @@ void handle_request(int fd)
         printf("Error parsing header (out of loop)\n");
         #endif
     }
-    header_root = header_temp;
-    header_curr = header_temp;
-    while(strcmp(buf, "\r\n"))
+    else
     {
-        Rio_readlineb(&rio, buf, MAXLINE);
-        if (strcmp(buf, "\r\n") == 0)
-        {
-            break;
-        }
-        header_temp = parse_header(buf, header_curr);
-        if (!header_temp)
-        {
-            /* TODO: implement error handling here. Should exit rather then break */
-            #ifdef DEBUG
-            printf("Error parsing header (inside loop)\n");
-            #endif
-        }
+        header_root = header_temp;
         header_curr = header_temp;
+        while(strcmp(buf, "\r\n"))
+        {
+            Rio_readlineb(&rio, buf, MAXLINE);
+            if (strcmp(buf, "\r\n") == 0)
+            {
+                break;
+            }
+            header_temp = parse_header(buf, header_curr);
+            if (!header_temp)
+            {
+                /* TODO: implement error handling here. Should exit rather then break */
+                #ifdef DEBUG
+                printf("Error parsing header (inside loop)\n");
+                #endif
+            }
+            header_curr = header_temp;
+        }
     }
 
     /* modify header and add necessary entries */
@@ -236,6 +239,14 @@ http_request* parse_request(char* line)
 /* parse a header line, return NULL when error */
 http_header* parse_header(char* line, http_header* last_node)
 {
+    if (strcmp(line, "\r\n") == 0)
+    {
+        #ifdef DEBUG
+        printf("Parsing empty header, quitting\n");
+        #endif
+        /* reaching empty line, abort with NULL */
+        return NULL;
+    }
     char* sperater = strstr(line, ": ");
     char* terminator = strstr(line, "\r\n");
     if ((!sperater) || (!terminator))
@@ -281,6 +292,11 @@ void free_http_metadata(http_request* request_ptr, http_header* header_head)
 void process_header(http_header* root, http_request* request)
 {
     http_header* temp = root;
+    if (temp == NULL)
+    {
+        /* empty header, aborting */
+        return;
+    }
     http_header* last = NULL;
     int found = 0;
     /* find the last node */
