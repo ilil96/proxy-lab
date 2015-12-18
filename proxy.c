@@ -163,9 +163,15 @@ void *handle_request(void* vargp)
     process_header(header_root, request_info);
 
     /* check cache */
+    #ifdef DEBUG
+    printf("Looking for cache\n");
+    #endif
     cache_entry* existing = search_cache(cache, request_info -> hostname, request_info -> path);
     if (existing != NULL)
     {
+        #ifdef DEBUG
+        printf("Accessing cache\n");
+        #endif
         /* found in cache */
         /* TODO: update last usage time */
         Rio_writen(fd, existing -> data, existing -> size);
@@ -245,6 +251,9 @@ void *handle_request(void* vargp)
         int this_size = cache_ptr - cache_candidate;
         if ((cache_scale + this_size) <= MAX_CACHE_SIZE)
         {
+            #ifdef DEBUG
+            printf("Writing to cache\n");
+            #endif
             /* no eviction */
             cache_entry* new_block = insert_cache(cache);
             new_block -> size = this_size;
@@ -257,12 +266,18 @@ void *handle_request(void* vargp)
         }
         else
         {
+            #ifdef DEBUG
+            printf("Writing to cache, with eviction\n");
+            #endif
             /* need eviction */
             while ((cache_scale + this_size) > MAX_CACHE_SIZE)
             {
                 cache_entry* to_evict = search_least_use(cache);
                 remove_cache(cache, to_evict);
             }
+            #ifdef DEBUG
+            printf("Eviction completed\n");
+            #endif
             cache_entry* new_block = insert_cache(cache);
             new_block -> size = this_size;
             strcpy(new_block -> hostname, request_info -> hostname);
@@ -553,14 +568,26 @@ cache_entry* search_cache(cache_entry* root, char* hostname, char* path)
 /* remove an entry in cache */
 void remove_cache(cache_entry* root, cache_entry* to_remove)
 {
+    if (to_remove == NULL)
+    {
+        #ifdef DEBUG
+        printf("Deleting non-existing entry, aborting\n");
+        #endif
+    }
+    #ifdef DEBUG
+    //printf("Removing entry\n");
+    #endif
     if (root == NULL)
     {
         return;
     }
-    while ((root -> next != to_remove) && (root != NULL))
+    while ((root != NULL) && (root -> next != to_remove))
     {
         root = root -> next;
     }
+    #ifdef DEBUG
+    //printf("Deleting entry found\n");
+    #endif
     if (root == NULL)
     {
         return;
@@ -569,6 +596,9 @@ void remove_cache(cache_entry* root, cache_entry* to_remove)
     cache_scale -= to_remove -> size;
     free(to_remove -> data);
     free(to_remove);
+    #ifdef DEBUG
+    printf("Entry removed\n");
+    #endif
     return;
 }
 
