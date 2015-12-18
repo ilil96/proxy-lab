@@ -25,7 +25,7 @@ typedef struct http_header
 
 /* local functions */
 void help_message();
-void handle_request(int fd);
+void *handle_request(void* vargp);
 http_request* parse_request(char* line);
 http_header* parse_header(char* line, http_header* current);
 void free_http_metadata(http_request* request_ptr, http_header* header_head);
@@ -44,6 +44,7 @@ int main(int argc, char **argv)
 {
     /* parse input message */
     int port_number;
+    pthread_t tid;
     if (argc != 2)
     {
         help_message();
@@ -52,25 +53,28 @@ int main(int argc, char **argv)
     port_number = atoi(argv[1]);
 
     /* open listen port */
-    int listenfd, connfd, clientlen;
+    int listenfd, clientlen, *connfd;
     struct sockaddr_in clientaddr;
     listenfd = Open_listenfd(port_number);
 
     /* wait for client requests */
     while (1)
     {
-	      clientlen = sizeof(clientaddr);
-	      connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-	      handle_request(connfd);
-	      Close(connfd);
+        connfd = malloc(sizeof(int));
+	    clientlen = sizeof(clientaddr);
+	    *connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+        Pthread_create(&tid, NULL, handle_request, connfd);
     }
 
     return 0;
 }
 
 /* handle incoming request */
-void handle_request(int fd)
+void *handle_request(void* vargp)
 {
+    int fd = *((int *)vargp);
+    Pthread_detach(pthread_self());
+    free(vargp);
     /* start parsing request */
     /* pointers for metadata */
     http_header* header_root = NULL;
@@ -177,6 +181,7 @@ void handle_request(int fd)
     }
 
     Close(remotefd);
+    Close(fd);
     /* TODO: call free_http_metadata() here to free metadata tables */
     /* TODO: close remote connection. Client connection will be closed by main() */
 }
