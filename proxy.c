@@ -30,7 +30,7 @@ typedef struct cache_entry
     char path[1000];
     unsigned long long size;
     char* data;
-    time_t usage;
+    clock_t usage;
     struct cache_entry* next;
 } cache_entry;
 
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     cache -> size = 0;
     strcpy(cache -> hostname, "");
     strcpy(cache -> path, "");
-    cache -> usage = time(0);
+    cache -> usage = clock();
 
     /* parse input message */
     int port_number;
@@ -121,7 +121,7 @@ void *handle_request(void* vargp)
     if (!request_info)
     {
         #ifdef DEBUG
-        printf("Error parsing request\n");
+        //printf("Error parsing request\n");
         return 0;
         #endif
         /* TODO: implement error handling here */
@@ -133,7 +133,7 @@ void *handle_request(void* vargp)
     {
         /* TODO: implement error handling here */
         #ifdef DEBUG
-        printf("Error parsing header (out of loop)\n");
+        //printf("Error parsing header (out of loop)\n");
         #endif
     }
     else
@@ -152,7 +152,7 @@ void *handle_request(void* vargp)
             {
                 /* TODO: implement error handling here. Should exit rather then break */
                 #ifdef DEBUG
-                printf("Error parsing header (inside loop)\n");
+                //printf("Error parsing header (inside loop)\n");
                 #endif
             }
             header_curr = header_temp;
@@ -161,6 +161,9 @@ void *handle_request(void* vargp)
 
     /* modify header and add necessary entries */
     process_header(header_root, request_info);
+    #ifdef DEBUG
+    printf("Requested file is %s\n", request_info -> path);
+    #endif
 
     /* check cache */
     #ifdef DEBUG
@@ -197,7 +200,8 @@ void *handle_request(void* vargp)
     /* establish connection to remote */
     int remotefd;
     #ifdef DEBUG
-    printf("Connecting %s at %d\n", remote_domain, remote_port);
+    //printf("Connecting %s at %d\n", remote_domain, remote_port);
+    printf("Fetching %s\n", request_info -> path);
     #endif
     remotefd = Open_clientfd(remote_domain, remote_port);
 
@@ -270,11 +274,14 @@ void *handle_request(void* vargp)
             printf("Writing to cache, with eviction\n");
             #endif
             /* need eviction */
-            while ((cache_scale + this_size) > MAX_CACHE_SIZE)
-            {
+            //while ((cache_scale + this_size) > MAX_CACHE_SIZE)
+            //{
                 cache_entry* to_evict = search_least_use(cache);
+                #ifdef DEBUG
+                //printf("Removing %s\n", to_evict -> path);
+                #endif
                 remove_cache(cache, to_evict);
-            }
+            //}
             #ifdef DEBUG
             printf("Eviction completed\n");
             #endif
@@ -315,7 +322,7 @@ http_request* parse_request(char* line)
     /* parse method */
     if (strcmp("GET", raw_method) != 0)
     {
-        printf("Unsupported method %s\n", raw_method);
+        //printf("Unsupported method %s\n", raw_method);
         // printf("Raw request: %s\n", line);
         /* if method is not GET, ignore this request */
         return 0;
@@ -358,7 +365,7 @@ http_header* parse_header(char* line, http_header* last_node)
     if (strcmp(line, "\r\n") == 0)
     {
         #ifdef DEBUG
-        printf("Parsing empty header, quitting\n");
+        //printf("Parsing empty header, quitting\n");
         #endif
         /* reaching empty line, abort with NULL */
         return NULL;
@@ -369,8 +376,8 @@ http_header* parse_header(char* line, http_header* last_node)
     {
         /* bad header format */
         #ifdef DEBUG
-        printf("Bad header format\n");
-        printf("Source: %s\n", line);
+        //printf("Bad header format\n");
+        //printf("Source: %s\n", line);
         #endif
         return NULL;
     }
@@ -617,17 +624,21 @@ cache_entry* insert_cache(cache_entry* root)
 /* update the timetag of a cache entry */
 void update_timetag(cache_entry* current)
 {
-    current -> usage = time(0);
+    current -> usage = clock();
     return;
 }
 
 /* search the entry which is used the most far ago */
 cache_entry* search_least_use(cache_entry* root)
 {
-    time_t least = root -> usage;
+    root = root -> next;
+    clock_t least = root -> usage;
     cache_entry* result = root;
     while (root != NULL)
     {
+        #ifdef DEBUG
+        printf("Checking cache %s, time tag %d\n", root -> path, root -> usage);
+        #endif
         if (least > root -> usage)
         {
             least = root -> usage;
@@ -635,5 +646,8 @@ cache_entry* search_least_use(cache_entry* root)
         }
         root = root -> next;
     }
+    #ifdef DEBUG
+    printf("LR found at %s\n", result -> path);
+    #endif
     return result;
 }
