@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "csapp.h"
 
 #define MAX_CACHE_SIZE 1049000
@@ -23,6 +24,20 @@ typedef struct http_header
     struct http_header* next;
 } http_header;
 
+typedef struct cache_entry
+{
+    char hostname[200];
+    char path[1000];
+    unsigned long long size;
+    char* data;
+    time_t usage;
+    struct cache_entry* next;
+} cache_entry;
+
+/* global variables */
+cache_entry* cache;
+int cache_scale;
+
 /* local functions */
 void help_message();
 void *handle_request(void* vargp);
@@ -30,6 +45,11 @@ http_request* parse_request(char* line);
 http_header* parse_header(char* line, http_header* current);
 void free_http_metadata(http_request* request_ptr, http_header* header_head);
 void process_header(http_header* root, http_request* request);
+cache_entry* search_cache(cache_entry* root, char* hostname, char* path);
+void remove_cache(cache_entry* root, cache_entry* to_remove);
+cache_entry* insert_cache(cache_entry* root);
+void update_timetag(cache_entry* current);
+cache_entry* search_least_use(cache_entry* root);
 
 /* display usage message */
 void help_message()
@@ -42,6 +62,16 @@ void help_message()
 /* main loop and dispatcher */
 int main(int argc, char **argv)
 {
+    /* initialize cache */
+    cache = malloc(sizeof(cache_entry));
+    cache_scale = 0;
+    cache -> next = NULL;
+    cache -> data = NULL;
+    cache -> size = 0;
+    strcpy(cache -> hostname, "");
+    strcpy(cache -> path, "");
+    cache -> usage = time(0);
+
     /* parse input message */
     int port_number;
     pthread_t tid;
@@ -92,7 +122,7 @@ void *handle_request(void* vargp)
     {
         #ifdef DEBUG
         printf("Error parsing request\n");
-        return;
+        return 0;
         #endif
         /* TODO: implement error handling here */
     }
@@ -131,6 +161,18 @@ void *handle_request(void* vargp)
 
     /* modify header and add necessary entries */
     process_header(header_root, request_info);
+
+    /* check cache */
+    cache_entry* existing = search_cache(cache, request_info -> hostname, request_info -> path);
+    if (existing != NULL)
+    {
+        /* found in cache */
+        /* TODO: update last usage time */
+        Rio_writen(fd, existing -> data, existing -> size);
+        update_timetag(existing);
+        Close(fd);
+        return 0;
+    }
 
     /* connecting remote */
     /* parse remote address and port */
@@ -175,15 +217,69 @@ void *handle_request(void* vargp)
     rio_t rio_remote;
     Rio_readinitb(&rio_remote, remotefd);
     int read_len;
+    /* prepare write to cache */
+    char cache_candidate[MAX_OBJECT_SIZE];
+    char* cache_ptr = cache_candidate;
+    int cache_ok = 1;
     while ((read_len = rio_readnb(&rio_remote, buf, MAXLINE)) > 0)
     {
         Rio_writen(fd, buf, read_len);
+        if (cache_ok)
+        {
+            /* check whether exceeds max object size */
+            if ((read_len + (cache_ptr - cache_candidate)) <= MAX_OBJECT_SIZE)
+            {
+                memcpy(cache_ptr, buf, read_len);
+                cache_ptr += read_len;
+            }
+            else
+            {
+                cache_ok = 0;
+            }
+        }
     }
+    /* write to cache if meet requirements */
+    /* TODO: update last use time */
+    if (cache_ok)
+    {
+        int this_size = cache_ptr - cache_candidate;
+        if ((cache_scale + this_size) <= MAX_CACHE_SIZE)
+        {
+            /* no eviction */
+            cache_entry* new_block = insert_cache(cache);
+            new_block -> size = this_size;
+            strcpy(new_block -> hostname, request_info -> hostname);
+            strcpy(new_block -> path, request_info -> path);
+            new_block -> data = malloc(this_size);
+            memcpy(new_block -> data, cache_candidate, this_size);
+            cache_scale += this_size;
+            update_timetag(new_block);
+        }
+        else
+        {
+            /* need eviction */
+            while ((cache_scale + this_size) > MAX_CACHE_SIZE)
+            {
+                cache_entry* to_evict = search_least_use(cache);
+                remove_cache(cache, to_evict);
+            }
+            cache_entry* new_block = insert_cache(cache);
+            new_block -> size = this_size;
+            strcpy(new_block -> hostname, request_info -> hostname);
+            strcpy(new_block -> path, request_info -> path);
+            new_block -> data = malloc(this_size);
+            memcpy(new_block -> data, cache_candidate, this_size);
+            cache_scale += this_size;
+            update_timetag(new_block);
+        }
+    }
+
 
     Close(remotefd);
     Close(fd);
     /* TODO: call free_http_metadata() here to free metadata tables */
     /* TODO: close remote connection. Client connection will be closed by main() */
+    return 0;
 }
 
 /*
@@ -435,4 +531,79 @@ void process_header(http_header* root, http_request* request)
         strcpy(last -> value, "close");
     }
     return;
+}
+
+/* search cache for certain block */
+cache_entry* search_cache(cache_entry* root, char* hostname, char* path)
+{
+    while (root != NULL)
+    {
+        if (strcmp(hostname, root -> hostname) == 0)
+        {
+            if (strcmp(path, root -> path) == 0)
+            {
+                return root;
+            }
+        }
+        root = root -> next;
+    }
+    return NULL;
+}
+
+/* remove an entry in cache */
+void remove_cache(cache_entry* root, cache_entry* to_remove)
+{
+    if (root == NULL)
+    {
+        return;
+    }
+    while ((root -> next != to_remove) && (root != NULL))
+    {
+        root = root -> next;
+    }
+    if (root == NULL)
+    {
+        return;
+    }
+    root -> next = to_remove -> next;
+    cache_scale -= to_remove -> size;
+    free(to_remove -> data);
+    free(to_remove);
+    return;
+}
+
+/* add a new cache entry. no initialization */
+cache_entry* insert_cache(cache_entry* root)
+{
+    while (root -> next != NULL)
+    {
+        root = root -> next;
+    }
+    root -> next = malloc(sizeof(cache_entry));
+    root -> next -> next = NULL;
+    return root -> next;
+}
+
+/* update the timetag of a cache entry */
+void update_timetag(cache_entry* current)
+{
+    current -> usage = time(0);
+    return;
+}
+
+/* search the entry which is used the most far ago */
+cache_entry* search_least_use(cache_entry* root)
+{
+    time_t least = root -> usage;
+    cache_entry* result = root;
+    while (root != NULL)
+    {
+        if (least > root -> usage)
+        {
+            least = root -> usage;
+            result = root;
+        }
+        root = root -> next;
+    }
+    return result;
 }
